@@ -33,6 +33,8 @@ int main( int argc, char **argv )
     rc = countPegs( &repo );         if( rc ) return rc;    // Return the number of pegs in each code
     rc = countCodes( &repo );        if( rc ) return rc;    // Return the number of codes listed in the solution file
     rc = parseFile( &repo );         if( rc ) return rc;    // Read the whole file into data structures
+    rc = setupCodeDefs( &repo );     if( rc ) return rc;    // Can only set up code defs after we know the number of codes, pegs and colours
+    rc = setupMarks( &repo );        if( rc ) return rc;    // Can only set up the marks after we know the number of codes, pegs and colours
 
     rc = checkCodes( &repo );        if( rc ) return rc;    // Check all codes are there, and none repeated
     rc = checkCounts( &repo );       if( rc ) return rc;    // Check all solutions end in all-black and that the counts of turns to solve is correct
@@ -353,7 +355,6 @@ int checkCounts( Repo* pRepo )
 int checkGuesses( Repo* pRepo )
 {
     int  code      = 0;
-    bool done      = false;
     int  level     = 0;
     int  prevMark  = 0;
     int  prevGuess = 0;
@@ -372,25 +373,20 @@ int checkGuesses( Repo* pRepo )
         if( pRepo->data[i].turns[0].guess != prevGuess ) pRepo->data[i].guessConsistant = false;
 
     // Now check lower levels
-    for( level = 0; ! done; level++ )
+    for( level = 0; level < pRepo->guesses; level++ )
     {
-        done = true;
         prevMark = pRepo->data[0].turns[level].mark;
-        if( prevMark != allBlack && prevMark != -1 )
+        prevGuess = pRepo->data[0].turns[level+1].guess;
+        for( i = 1; i < pRepo->actualCodes; i++ )
         {
-            done = false;
-            prevGuess = pRepo->data[0].turns[level+1].guess;
-            for( i = 1; i < pRepo->actualCodes; i++ )
+            if( prevMark != allBlack && prevMark != -1 && pRepo->data[i].turns[level].mark == prevMark )
             {
-                if( pRepo->data[i].turns[level].mark == prevMark )
-                {
-                    if( pRepo->data[i].turns[level+1].guess != prevGuess ) pRepo->data[i].guessConsistant = false;
-                }
-                else
-                {
-                    prevMark = pRepo->data[i].turns[level].mark;
-                    prevGuess = pRepo->data[i].turns[level+1].guess;
-                }
+                if( pRepo->data[i].turns[level+1].guess != prevGuess ) pRepo->data[i].guessConsistant = false;
+            }
+            else
+            {
+                prevMark = pRepo->data[i].turns[level].mark;
+                prevGuess = pRepo->data[i].turns[level+1].guess;
             }
         }
     }

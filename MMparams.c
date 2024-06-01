@@ -49,9 +49,6 @@ int setup( Repo* pRepo, int argc, char **argv )
     pRepo->data        = NULL;
     pRepo->missing     = NULL;
 
-    rc = setupCodeDefs( pRepo ); if( rc != 0 ) return -1;
-    rc = setupMarks( pRepo );    if( rc != 0 ) return -1;
-
     // Expecting one parameter, which should be a filename
     if( argc == 2 && strlen( argv[1] ) > 0 )
         pRepo->filename = argv[1];
