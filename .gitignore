@@ -1,0 +1,7 @@
+/.vscode/*
+/build/*
+/Test*
+/.DS_Store
+/ideas.txt
+/*.csv
+/*.xlsx
