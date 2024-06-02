@@ -25,35 +25,37 @@
 int setup( Repo* pRepo, int argc, char **argv )
 {
     FILE* fp           = NULL;
-    char  baseName[256];
     char  dirName[256];
-    int   p            = 0;
-    int   c            = 0;
-    int   i            = 0;
-    int   rc           = 0;
+    int   p             = 0;
+    int   c             = 0;
+    int   i             = 0;
+    int   rc            = 0;
 
     // Initialise repository
-    pRepo->filename    = NULL;
-    pRepo->fp          = NULL;
-    pRepo->pegs        = 0;
-    pRepo->pegsOK      = true;
-    pRepo->colours     = 0;
-    pRepo->coloursOK   = true;
-    pRepo->codes       = 0;
-    pRepo->actualCodes = 0;
-    pRepo->codesOK     = false;
-    pRepo->guesses     = 8;
-    pRepo->headerOK    = false;
-    pRepo->codeDefs    = NULL;
-    pRepo->marking     = NULL;
-    pRepo->data        = NULL;
-    pRepo->missing     = NULL;
+    // Input file
+    pRepo->filename     = NULL;
+    pRepo->fp           = NULL;
+    // Parameters
+    pRepo->pegs         = 0;
+    pRepo->colours      = 0;
+    pRepo->codes        = 0;
+    pRepo->actualCodes  = 0;
+    pRepo->guesses      = 8;
+    // Correctness flags
+    pRepo->pegsOK       = true;      // We van only validate this if number also in filename - so assume OK
+    pRepo->coloursOK    = true;      // Similarly for this 
+    pRepo->codesOK      = false;     // We can always validate this, so take a pessimistic outlook
+    // Sub structures
+    pRepo->codeDefs     = NULL;
+    pRepo->marking      = NULL;
+    pRepo->data         = NULL;
+    pRepo->missing      = NULL;
 
     // Expecting one parameter, which should be a filename
     if( argc == 2 && strlen( argv[1] ) > 0 )
         pRepo->filename = argv[1];
     else
-        pRepo->filename = "/Users/brucetandy/Documents/Mastermind/Results/SolnMM(2,2)_full_951211835042434.csv";  // DEBUG
+        pRepo->filename = "/Users/brucetandy/Documents/Mastermind/Results/tmp.csv";  // DEBUG
 
     if( pRepo->filename != NULL )
     {
@@ -62,76 +64,76 @@ int setup( Repo* pRepo, int argc, char **argv )
         {
             for( p = 0; p < 256; p++ )
             {
-                baseName[p] = '\0';   // fully clear the baseName
-                dirName[p]  = '\0';   // and dirName
+                pRepo->baseName[p] = '\0';   // fully clear the baseName
+                dirName[p]  = '\0';          // and dirName
             }
             p = strlen( pRepo->filename ) - 1;
             while( p >= 0 && pRepo->filename[p] != '/' ) p--;
             if( p >= 0 && pRepo->filename[p] == '/' )
             {
-                strcpy( baseName, &pRepo->filename[p+1] );
+                strcpy( pRepo->baseName, &pRepo->filename[p+1] );
                 strcpy( dirName,  pRepo->filename );
                 dirName[p] = '\0';
             }
             else
             {
-                strcpy( baseName, pRepo->filename );
+                strcpy( pRepo->baseName, pRepo->filename );
                 dirName[0] = '\0';
             }
 
             // Parse the number of pegs and colours from the file name
             // However, it's not a fatal error if the file has been renamed
-            if( baseName[6] == '(' )
+            if( pRepo->baseName[6] == '(' )
             {
-                if( baseName[7] >= '0' && baseName[7] <= '9' )
+                if( pRepo->baseName[7] >= '0' && pRepo->baseName[7] <= '9' )
                 {
-                    if( baseName[8] == ',' )
+                    if( pRepo->baseName[8] == ',' )
                     {
-                        pRepo->pegs = baseName[7] - '0';
+                        pRepo->pegs = pRepo->baseName[7] - '0';
                         p = 9;
                     }
-                    else if( baseName[8] >= '0' && baseName[8] <= '9' && baseName[9] == ',' )
+                    else if( pRepo->baseName[8] >= '0' && pRepo->baseName[8] <= '9' && pRepo->baseName[9] == ',' )
                     {
-                        pRepo->pegs = ( baseName[7] - '0' ) * 10 + baseName[8] - '0';
+                        pRepo->pegs = ( pRepo->baseName[7] - '0' ) * 10 + pRepo->baseName[8] - '0';
                         p = 10;
                     }
                     else
                     {
-                        fprintf( stderr, "Filename does not have the expected format: %s\n", baseName );
+                        fprintf( stderr, "Filename does not have the expected format: %s\n", pRepo->baseName );
                         fprintf( stderr, "%52s\n", "^" );  // 44 + 8
                     }
 
-                    if( baseName[p] >= '0' && baseName[p] <= '9' )
+                    if( pRepo->baseName[p] >= '0' && pRepo->baseName[p] <= '9' )
                     {
-                        if( baseName[p+1] == ')' )
+                        if( pRepo->baseName[p+1] == ')' )
                         {
-                            pRepo->colours = baseName[p] - '0';
+                            pRepo->colours = pRepo->baseName[p] - '0';
                         }
-                        else if( baseName[p+1] >= '0' && baseName[p+1] <= '9' && baseName[p+2] == ')' )
+                        else if( pRepo->baseName[p+1] >= '0' && pRepo->baseName[p+1] <= '9' && pRepo->baseName[p+2] == ')' )
                         {
-                            pRepo->colours = ( baseName[p] - '0' ) * 10 + baseName[p+1] - '0';
+                            pRepo->colours = ( pRepo->baseName[p] - '0' ) * 10 + pRepo->baseName[p+1] - '0';
                         }
                         else
                         {
-                            fprintf( stderr, "Filename does not have the expected format: %s\n", baseName );
+                            fprintf( stderr, "Filename does not have the expected format: %s\n", pRepo->baseName );
                             fprintf( stderr, "%50s\n", "^" );  // 44 + 6
                         }
                     }
                     else
                     {
-                        fprintf( stderr, "Filename does not have the expected format: %s\n", baseName );
+                        fprintf( stderr, "Filename does not have the expected format: %s\n", pRepo->baseName );
                         fprintf( stderr, "%50s\n", "^" );  // 44 + 6
                     }
                 }
                 else
                 {
-                    fprintf( stderr, "Filename does not have the expected format: %s\n", baseName );
+                    fprintf( stderr, "Filename does not have the expected format: %s\n", pRepo->baseName );
                     fprintf( stderr, "%50s\n", "^" );  // 44 + 6
                 }
             }
             else
             {
-                fprintf( stderr, "Filename does not have the expected format: %s\n", baseName );
+                fprintf( stderr, "Filename does not have the expected format: %s\n", pRepo->baseName );
                 fprintf( stderr, "%50s\n", "^" );  // 44 + 6
             }
         }

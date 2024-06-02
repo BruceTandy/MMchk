@@ -43,17 +43,21 @@ struct CodeDef;
 // Root structure used to hold all of the puzzle parameters and to point to structures used in finding the best solution
 typedef struct Repo
 {
+    // Input file
     char*            filename;                       // Filename to analyse
+    char             baseName[256];                  // Filename without path
     FILE*            fp;                             // Open file pointer
+    // Parameters
     char             pegs;                           // Number of pegs in code
-    bool             pegsOK;                         // Do we have a consistent view of the numbers of pegs?
     char             colours;                        // Number of colours in code
-    bool             coloursOK;                      // Do we have a consistent view of the numbers of colours?
     int              codes;                          // Expected number of codes
     int              actualCodes;                    // Actual number of codes in solution file
-    bool             codesOK;                        // Did we get the expected number of codes?
     int              guesses;                        // Max number of guesses
-    bool             headerOK;                       // Is the header there and as expected
+    // Correctness flags
+    bool             pegsOK;                         // Do we have a consistent view of the numbers of pegs?
+    bool             coloursOK;                      // Do we have a consistent view of the numbers of colours?
+    bool             codesOK;                        // Did we get the expected number of codes?
+    // Sub structures
     struct CodeDef*  codeDefs;                       // Static information about each code
     char**           marking;                        // Two dimensional array holding marks
     struct Solution* data;                           // All data held in file being analysed (except headers)
@@ -63,34 +67,37 @@ typedef struct Repo
 // A turn consists of a guess and a mark
 typedef struct Turn
 {   
-    int  guess;
-    bool guessOK;
-    bool guessIllegal;
-    int  mark;
-    bool markOK;
-    bool used;
+    // Parameters
+    int  guess;                                 // Numeric representation of the guess
+    int  mark;                                  // Numeric representation of the mark
+    // Correctness flags
+    bool guessOK;                               // Is the guess a well formatted guess?
+    bool markOK;                                // Is the mark what was expected?
 } Turn;
 
 // A Solution consists the code to be guessed, an array of turns and the number of turns taken to resolve
+// This is a representation of a file from the solution file
 typedef struct Solution
 {   
-    int          code;
-    bool         codeOK;
-    bool         codeRepeated;
-    int          noTurns;
-    bool         turnsOK;
-    int          actualNoTurns;
-    bool         resolved;
-    bool         marksOK;
-    bool         guessesOK;
-    bool         guessConsistant;
+    // Parameters
+    int          code;                          // The code solved on this line
+    int          noTurns;                       // Number of turns we are told it takes to solve this code
+    int          actualNoTurns;                 // Number of turns it actually took (clearly should be the same)
+    // Correctness flags
+    bool         codeOK;                        // Is the numeric code the same of the alpha representation?
+    bool         codeRepeated;                  // Has this code been solved previously?
+    bool         turnsOK;                       // Does the number of turns output match the actual number of turns shown?
+    bool         resolved;                      // Do the guesses / marks end with all-black?
+    bool         marksOK;                       // Are all the given marks accurate?
+    bool         guessesOK;                     // Is the format of the guesses ok - ie Guess+Mark, Guess+Mark...
+    bool         guessConsistant;               // Is the same guess made for every code after the same mark?
     struct Turn* turns;
 } Solution;
 
 // A Solution consists the code to be guessed, an array of turns and the number of turns taken to resolve
 typedef struct Absent
 {
-    int          code;
+    int          code;                          // Store details of any missing codes
     bool         codeMissing;
 } Absent;
 
@@ -115,5 +122,6 @@ int parseCode( Repo* pRepo, char* szCode );
 int getField( FILE* fp, char* field, int maxLen );
 int nextField( char* string, char* field, int maxLen );
 int getLine( FILE* fp, char* line, int maxLen );
+int sgetc( FILE* fp );
 
 #endif   /* MMCHK_H */

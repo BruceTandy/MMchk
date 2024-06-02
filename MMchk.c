@@ -47,8 +47,7 @@ int main( int argc, char **argv )
 }
 
 // Check the first line of the file
-// Only set headerOK true if it looks like a header
-// If it does look like a header, set up the max number of guesses as well
+// If it does not look like it should, assume the file is corrupt and bail out
 int parseHeader( Repo* pRepo )
 {
     char line[256];
@@ -69,25 +68,45 @@ int parseHeader( Repo* pRepo )
         {
             fieldLen = nextField( line + offset, field, 256 );
             offset += fieldLen + 1;
-            if( strcmp( field, "#" ) != 0 ) return 0;
+            if( strcmp( field, "#" ) != 0 )
+            {
+                fprintf( stderr, "Header line is incorrectly formatted - assuming file is corrupt\n" );
+                return -1;
+            }
         }
         if( fields > 1 )
         {
             fieldLen = nextField( line + offset, field, 256 );
             offset += fieldLen + 1;
-            if( strcmp( field, "Solution" ) != 0 ) return 0;
+            if( strcmp( field, "Solution" ) != 0 )
+            {
+                fprintf( stderr, "Header line is incorrectly formatted - assuming file is corrupt\n" );
+                return -1;
+            }
         }
         if( fields > 2 )
         {
             fieldLen = nextField( line + offset, field, 256 );
             offset += fieldLen + 1;
-            if( strcmp( field, "Turns" ) != 0 ) return 0;
+            if( strcmp( field, "Turns" ) != 0 )
+            {
+                fprintf( stderr, "Header line is incorrectly formatted - assuming file is corrupt\n" );
+                return -1;
+            }
         }
-        if( fields == ( fields / 2 ) * 2 ) return 0;  // Not expecting an even number of fields
-        if( fields > 3 + 10 * 2 )          return 0;  // Not expection more than 10 guesses
+        if( fields == ( fields / 2 ) * 2 )      // Not expecting an even number of fields
+        {
+            fprintf( stderr, "Header line shows mismatched guesses and marks - assuming file is corrupt\n" );
+            return -1;
+        }
+
+        if( fields > 3 + 10 * 2 )               // Not expection more than 10 guesses
+        {
+            fprintf( stderr, "Header line shows more guesses than expected - assuming file is corrupt\n" );
+            return -1;
+        }
 
         pRepo->guesses = ( fields - 3 ) / 2;
-        pRepo->headerOK = true;
     }
     return 0;
 }
@@ -103,7 +122,7 @@ int countPegs( Repo* pRepo )
 
     rc = fseek( pRepo->fp, 0, SEEK_SET );      // Go to the beginning of the file
 
-    if( pRepo->headerOK ) getLine( pRepo->fp, line, 256 );
+    getLine( pRepo->fp, line, 256 );
     len = getField( pRepo->fp, field, 256 );
     len = getField( pRepo->fp, field, 256 );
     if( len != EOF )
@@ -136,7 +155,7 @@ int countCodes( Repo* pRepo )
         return -1;
     }
     while( getLine( pRepo->fp, line, 256 ) != EOF )  pRepo->actualCodes += 1;
-    if( pRepo->headerOK ) pRepo->actualCodes -= 1;
+    pRepo->actualCodes -= 1;    // Account for header line
 
     // Calculate the apparent number of colours and compare with what we may have read from the filename
     // If we did not get the number of colours from the filename, then have to go with calculated number
@@ -165,9 +184,13 @@ int parseFile( Repo* pRepo )
     int  code     = 0;
     int  guesses  = 0;
     int  fieldLen = 0;
+    bool done     = false;
+    int  allBlack = -1;
     int  i        = 0;
     int  j        = 0;
     int  rc       = 0;
+
+    allBlack = ( pRepo->pegs * ( pRepo->pegs + 3 ) ) / 2 - 1;
 
     pRepo->data = malloc( sizeof(Solution) * pRepo->actualCodes );
     if( pRepo->data == NULL )
@@ -190,28 +213,30 @@ int parseFile( Repo* pRepo )
 
     for( i = 0; i < pRepo->actualCodes; i++ )
     {
+        // Parameters
         pRepo->data[i].code            = -1;
-        pRepo->data[i].codeOK          = false;
-        pRepo->data[i].codeRepeated    = false;
         pRepo->data[i].noTurns         = -1;
-        pRepo->data[i].turnsOK         = false;
         pRepo->data[i].actualNoTurns   = 99999;
-        pRepo->data[i].resolved        = false;
-        pRepo->data[i].marksOK         = true;
-        pRepo->data[i].guessesOK       = false;     // Guess data is in the form Guess / Mark as expected
-        pRepo->data[i].guessConsistant = true;      // Same guess as all similar marks? We will only ever turn this false, so start positive
+        // Correctness flags
+        pRepo->data[i].codeOK          = false;     // Set either way, so need to prove its good
+        pRepo->data[i].codeRepeated    = true;      // Set either way, so need to prove its good
+        pRepo->data[i].turnsOK         = false;     // Set either way, so need to prove its good
+        pRepo->data[i].resolved        = false;     // Set if ok, so need to prove its good
+        pRepo->data[i].marksOK         = true;      // Only change if there's a problem, so start optimistically
+        pRepo->data[i].guessesOK       = false;     // Set either way, so need to prove its good
+        pRepo->data[i].guessConsistant = true;      // Only change if there's a problem, so start optimistically
 
         pRepo->data[i].turns = malloc( sizeof(Turn) * pRepo->guesses );
         if( pRepo->data[i].turns != NULL )
         {
             for( j = 0; j < pRepo->guesses; j++ )
             {
+                // Parameters
                 pRepo->data[i].turns[j].guess        = -1;
-                pRepo->data[i].turns[j].guessOK      = false;
-                pRepo->data[i].turns[j].guessIllegal = true;
                 pRepo->data[i].turns[j].mark         = -1;
-                pRepo->data[i].turns[j].markOK       = false;
-                pRepo->data[i].turns[j].used         = false;
+                // Correctness flags
+                pRepo->data[i].turns[j].guessOK      = false;     // Set either way, so need to prove its good
+                pRepo->data[i].turns[j].markOK       = false;     // Set if ok, so need to prove its good
             }
         }
         else
@@ -223,8 +248,8 @@ int parseFile( Repo* pRepo )
 
     rc = fseek( pRepo->fp, 0, SEEK_SET );      // Go to the beginning of the file
 
-    // Throw away header line if there is one
-    if( pRepo->headerOK ) getLine( pRepo->fp, line, 256 );
+    // Throw away header line
+    getLine( pRepo->fp, line, 256 );
 
     for( i = 0; i < pRepo->actualCodes; i++ )
     {
@@ -246,7 +271,6 @@ int parseFile( Repo* pRepo )
                 fieldLen = nextField( line + offset, field, 256 );
                 offset += fieldLen + 1;
                 pRepo->data[i].noTurns = stringToInt( field );
-                pRepo->data[i].turnsOK = false;                             // 'til proved otherwise
             }
 
             guesses = (fields - 3) / 2;
@@ -258,19 +282,18 @@ int parseFile( Repo* pRepo )
                 return -1;
             }
 
-            for( j = 0; j < guesses; j++ )
+            done = false;
+            for( j = 0; j < guesses && ! done; j++ )
             {
-                pRepo->data[i].turns[j].used = true;
-
                 fieldLen = nextField( line + offset, field, 256 );
                 offset += fieldLen + 1;
                 pRepo->data[i].turns[j].guess = parseCode( pRepo, field );
-                pRepo->data[i].turns[j].guessOK = ( pRepo->data[i].turns[j].guess == -1 );
+                pRepo->data[i].turns[j].guessOK = ( pRepo->data[i].turns[j].guess != -1 );
 
                 fieldLen = nextField( line + offset, field, 256 );
                 offset += fieldLen + 1;
                 pRepo->data[i].turns[j].mark = getMark( pRepo, field );
-                pRepo->data[i].turns[j].markOK = ( pRepo->data[i].turns[j].mark == -1 );
+                if( pRepo->data[i].turns[j].mark == allBlack ) done = true;
             }
         }
         else
@@ -311,6 +334,7 @@ int checkCodes( Repo* pRepo )
             {
                 pRepo->missing[i].code        = i;
                 pRepo->missing[i].codeMissing = true;
+                pRepo->data[i].codeRepeated = false;
             }
         }
     }
@@ -339,7 +363,7 @@ int checkCounts( Repo* pRepo )
         done = false;
         for( g = 0; g < pRepo->guesses && ! done; g++ )
         {
-            if( pRepo->data[i].turns[g].mark == allBlack )
+            if( pRepo->data[i].turns[g].mark == allBlack || pRepo->data[i].turns[g].mark == -1 )
             {
                 pRepo->data[i].turnsOK = ( pRepo->data[i].noTurns == g + 1 );
                 pRepo->data[i].actualNoTurns = g + 1;
@@ -416,7 +440,60 @@ int checkMarks( Repo* pRepo )
 
 int report( Repo* pRepo )
 {
-    fprintf( stdout, "Placeholder\n" );
+    bool error         = false;
+    bool solutionError = false;
+    int  i             = 0;
+    int  j             = 0;
+
+    fprintf( stdout, "\nAnalysis of %s\n", pRepo->baseName );
+    if( pRepo->pegsOK && pRepo->coloursOK )
+        fprintf( stdout, "Pegs: %d Colours: %d\n", pRepo->pegs, pRepo->colours );
+    else
+        fprintf( stdout, "Pegs: %d Colours: %d (inconsistent with file name)\n", pRepo->pegs, pRepo->colours );
+
+
+    fprintf( stdout, "Expected number of codes           " );
+    if( pRepo->codesOK )  fprintf( stdout, "OK\n" ); else fprintf( stdout, "PROBLEM\n" );
+
+    fprintf( stdout, "No codes repeated                  " );
+    solutionError = false;
+    for( i = 0; i < pRepo->actualCodes; i++ ) if( ! pRepo->data[i].codeOK ) solutionError = true;
+    if( ! solutionError ) fprintf( stdout, "OK\n" ); else fprintf( stdout, "PROBLEM\n" );
+
+    fprintf( stdout, "Turns to solve                     " );
+    solutionError = false;
+    for( i = 0; i < pRepo->actualCodes; i++ ) if( ! pRepo->data[i].turnsOK ) solutionError = true;
+    if( ! solutionError ) fprintf( stdout, "OK\n" ); else fprintf( stdout, "PROBLEM\n" );
+
+    fprintf( stdout, "All codes solved                   " );
+    solutionError = false;
+    for( i = 0; i < pRepo->actualCodes; i++ ) if( ! pRepo->data[i].resolved ) solutionError = true;
+    if( ! solutionError ) fprintf( stdout, "OK\n" ); else fprintf( stdout, "PROBLEM\n" );
+
+    fprintf( stdout, "All marks correct                  " );
+    solutionError = false;
+    for( i = 0; i < pRepo->actualCodes; i++ ) if( ! pRepo->data[i].marksOK ) solutionError = true;
+    if( ! solutionError ) fprintf( stdout, "OK\n" ); else fprintf( stdout, "PROBLEM\n" );
+
+    fprintf( stdout, "All guesses consistant             " );
+    solutionError = false;
+    for( i = 0; i < pRepo->actualCodes; i++ ) if( ! pRepo->data[i].guessConsistant ) solutionError = true;
+    if( ! solutionError ) fprintf( stdout, "OK\n" ); else fprintf( stdout, "PROBLEM\n" );
+
+
+    fprintf( stdout, "All guesses formatted as expected  " );
+    solutionError = false;
+    for( i = 0; i < pRepo->actualCodes; i++ )
+    {
+        if( ! pRepo->data[i].guessesOK )
+            solutionError = true;
+        else
+            for( j = 0; j < pRepo->data[i].actualNoTurns; j++ )
+                if( ! pRepo->data[i].turns[j].guessOK )
+                    solutionError = true;
+    }
+    if( ! solutionError ) fprintf( stdout, "OK\n" ); else fprintf( stdout, "PROBLEM\n" );
+
     return 0;
 }
 
@@ -437,7 +514,8 @@ int parseCode( Repo* pRepo, char* szCode )
         fprintf( stderr, "Wrong number of pegs in code\n" );
         return -1;
     }
-    for( i = pRepo->pegs - 1; i >= 0; i-- )
+//    for( i = pRepo->pegs - 1; i >= 0; i-- )
+    for( i = 0; i < pRepo->pegs; i++ )
     {
         code *= pRepo->pegs;
         code += szCode[i+offset] - 'A';
@@ -459,7 +537,7 @@ int getField( FILE* fp, char* field, int maxLen )
     int i      = 0;
 
     field[0] = '\0';
-    ch = fgetc( fp );
+    ch = sgetc( fp );
     if( ch == EOF ) return EOF;
 
     while( ch != ',' && ch != '\n' && ch != EOF )
@@ -474,15 +552,15 @@ int getField( FILE* fp, char* field, int maxLen )
             field[0] = '0';
         }
         i += 1;
-        ch = fgetc( fp );
+        ch = sgetc( fp );
     }
 
     return i;
 }
 
 // Get the next field from the string passed
-// Field is delimited by a comma or nul delimiter
-// The returned field does not contain the comma delimiter
+// Field is delimited by a comma or null delimiter
+// The returned field does not contain the delimiter
 // If the passed string is empty, the returned string will also be empty
 // The field length is returned
 // If the maxLen is too short, an empty field string is returned
@@ -527,8 +605,8 @@ int getLine( FILE* fp, char* line, int maxLen )
     int i      = 0;
 
     line[0] = '\0';
-    ch = fgetc( fp );
-    while( ch == '\n' ) ch = fgetc( fp );       // Step over any empty lines
+    ch = sgetc( fp );
+    while( ch == '\n' ) ch = sgetc( fp );       // Step over any empty lines
     if( ch == EOF ) return EOF;
 
     fields = 1;
@@ -545,8 +623,17 @@ int getLine( FILE* fp, char* line, int maxLen )
         }
         i += 1;
         if( ch == ',' ) fields += 1;
-        ch = fgetc( fp );
+        ch = sgetc( fp );
     }
 
     return fields;
+}
+
+// Special version of fgetc to convert \r\n combinations into \n
+// (Windows and Excel introduce the \r\n combination)
+int sgetc( FILE* fp )
+{
+    int ch = fgetc( fp );
+    if( ch == '\r' ) ch = fgetc( fp );
+    return ch;
 }
