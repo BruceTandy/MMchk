@@ -14,7 +14,9 @@
 #include "MMchk.h"
 
 int cmpCodeOrder(const void* a, const void* b);
+int cmpLineOrder(const void* a, const void* b);
 int cmpMarkOrder(const void* a, const void* b);
 int cmpMarkLevel( Turn* a, Turn* b );
+int cmpAbsentOrder(const void* a, const void* b);
 
 #endif  /* MMSORTFNS_H */

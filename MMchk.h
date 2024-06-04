@@ -46,6 +46,8 @@ typedef struct Repo
     // Input file
     char*            filename;                       // Filename to analyse
     char             baseName[256];                  // Filename without path
+    char             dirName[256];                   // Directory name
+    char             outputName[256];                // Filename to output errors or problems
     FILE*            fp;                             // Open file pointer
     // Parameters
     char             pegs;                           // Number of pegs in code
@@ -80,6 +82,7 @@ typedef struct Turn
 typedef struct Solution
 {   
     // Parameters
+    int          line;                          // Line of the file that contains this solution (not counting the header)
     int          code;                          // The code solved on this line
     int          noTurns;                       // Number of turns we are told it takes to solve this code
     int          actualNoTurns;                 // Number of turns it actually took (clearly should be the same)

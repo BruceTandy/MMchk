@@ -22,6 +22,12 @@ int cmpCodeOrder(const void* a, const void* b)
    return ((Solution*)a)->code - ((Solution*)b)->code;
 }
 
+// Used by qsort to order into the original order
+int cmpLineOrder(const void* a, const void* b)
+{
+   return ((Solution*)a)->line - ((Solution*)b)->line;
+}
+
 // Used by qsort to order into ascending order by marks at each level
 int cmpMarkOrder(const void* a, const void* b)
 {
@@ -34,4 +40,11 @@ int cmpMarkLevel( Turn* a, Turn* b )
    if( a->mark > b->mark ) return  1;
    if( a->mark < b->mark ) return -1;
    return cmpMarkLevel( ++a, ++b );
+}
+
+int cmpAbsentOrder(const void* a, const void* b)
+{
+   if(   ((Absent*)a)->codeMissing && ! ((Absent*)b)->codeMissing ) return -1;
+   if( ! ((Absent*)a)->codeMissing &&   ((Absent*)b)->codeMissing ) return  1;
+   return ((Absent*)a)->code - ((Absent*)b)->code;
 }

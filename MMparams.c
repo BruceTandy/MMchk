@@ -25,7 +25,6 @@
 int setup( Repo* pRepo, int argc, char **argv )
 {
     FILE* fp           = NULL;
-    char  dirName[256];
     int   p             = 0;
     int   c             = 0;
     int   i             = 0;
@@ -55,7 +54,7 @@ int setup( Repo* pRepo, int argc, char **argv )
     if( argc == 2 && strlen( argv[1] ) > 0 )
         pRepo->filename = argv[1];
     else
-        pRepo->filename = "/Users/brucetandy/Documents/Mastermind/Results/tmp.csv";  // DEBUG
+        pRepo->filename = "/Users/brucetandy/Documents/Mastermind/Results/SolnMM(4,6)_mes_1.csv";  // DEBUG
 
     if( pRepo->filename != NULL )
     {
@@ -65,20 +64,20 @@ int setup( Repo* pRepo, int argc, char **argv )
             for( p = 0; p < 256; p++ )
             {
                 pRepo->baseName[p] = '\0';   // fully clear the baseName
-                dirName[p]  = '\0';          // and dirName
+                pRepo->dirName[p]  = '\0';   // and dirName
             }
             p = strlen( pRepo->filename ) - 1;
             while( p >= 0 && pRepo->filename[p] != '/' ) p--;
             if( p >= 0 && pRepo->filename[p] == '/' )
             {
                 strcpy( pRepo->baseName, &pRepo->filename[p+1] );
-                strcpy( dirName,  pRepo->filename );
-                dirName[p] = '\0';
+                strcpy( pRepo->dirName,  pRepo->filename );
+                pRepo->dirName[p] = '\0';
             }
             else
             {
                 strcpy( pRepo->baseName, pRepo->filename );
-                dirName[0] = '\0';
+                pRepo->dirName[0] = '\0';
             }
 
             // Parse the number of pegs and colours from the file name
