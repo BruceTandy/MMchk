@@ -209,8 +209,8 @@ int parseFile( Repo* pRepo )
 
     for( i = 0; i < pRepo->codes; i++ )
     {
-        pRepo->missing[i].code        = -1;
-        pRepo->missing[i].codeMissing = false;
+        pRepo->missing[i].code        = i;
+        pRepo->missing[i].codeMissing = true;
     }
 
     for( i = 0; i < pRepo->actualCodes; i++ )
@@ -290,14 +290,29 @@ int parseFile( Repo* pRepo )
             for( j = 0; j < guesses && ! done; j++ )
             {
                 fieldLen = nextField( line + offset, field, 256 );
-                offset += fieldLen + 1;
-                pRepo->data[i].turns[j].guess = parseCode( pRepo, field );
-                pRepo->data[i].turns[j].guessOK = ( pRepo->data[i].turns[j].guess != -1 );
+                if( fieldLen > 0 )
+                {
+                    offset += fieldLen + 1;
+                    pRepo->data[i].turns[j].guess = parseCode( pRepo, field );
+                    pRepo->data[i].turns[j].guessOK = ( pRepo->data[i].turns[j].guess != -1 );
 
-                fieldLen = nextField( line + offset, field, 256 );
-                offset += fieldLen + 1;
-                pRepo->data[i].turns[j].mark = getMark( pRepo, field );
-                if( pRepo->data[i].turns[j].mark == allBlack ) done = true;
+                    fieldLen = nextField( line + offset, field, 256 );
+                    if( fieldLen > 0 )
+                    {
+                        offset += fieldLen + 1;
+                        pRepo->data[i].turns[j].mark = getMark( pRepo, field );
+                        if( pRepo->data[i].turns[j].mark == allBlack || pRepo->data[i].turns[j].mark == -1 ) done = true;
+                    }
+                    else
+                    {
+                        done = true;
+                    }
+                }
+                else
+                {
+                    done = true;
+                }
+
             }
         }
         else
@@ -334,19 +349,18 @@ int checkCodes( Repo* pRepo )
         {
             for( j = expectedCode; j < pRepo->data[i].code; j++ )
             {
-                pRepo->missing[j].code        = j;
                 pRepo->missing[j].codeMissing = true;
                 pRepo->data[j].codeRepeated = false;
             }
+            pRepo->data[i].codeRepeated = false;
         }
         expectedCode = pRepo->data[i].code + 1;
         priorCode = pRepo->data[i].code;
-    }
-    // Did we stop solving codes early?
-    for( i = pRepo->actualCodes + 1; i < pRepo->codes; i++ )
-    {
-        pRepo->missing[i].code        = i;
-        pRepo->missing[i].codeMissing = true;
+
+        // Mark off each code we've seen
+        if( priorCode < pRepo->codes )
+            pRepo->missing[priorCode].codeMissing = false;
+
     }
     return 0;
 }
@@ -367,11 +381,18 @@ int checkCounts( Repo* pRepo )
         done = false;
         for( g = 0; g < pRepo->guesses && ! done; g++ )
         {
-            if( pRepo->data[i].turns[g].mark == allBlack || pRepo->data[i].turns[g].mark == -1 )
+            if( pRepo->data[i].turns[g].mark == allBlack )
             {
                 pRepo->data[i].turnsOK = ( pRepo->data[i].noTurns == g + 1 );
                 pRepo->data[i].actualNoTurns = g + 1;
                 pRepo->data[i].resolved = true;
+                done = true;
+            }
+            else if( pRepo->data[i].turns[g].mark == -1 )
+            {
+                pRepo->data[i].turnsOK = ( pRepo->data[i].noTurns == g );
+                pRepo->data[i].actualNoTurns = g;
+                pRepo->data[i].resolved = false;
                 done = true;
             }
         }
@@ -401,24 +422,21 @@ int checkGuesses( Repo* pRepo )
     for( i = 1; i < pRepo->actualCodes; i++ )
         if( pRepo->data[i].turns[0].guess != prevGuess ) pRepo->data[i].guessConsistant = false;
 
-    // Now check other levels
-    for( level = 1; level < pRepo->guesses; level++ )
+    // Now check eery guess at other levels
+    for( i = 1; i < pRepo->actualCodes; i++ )
     {
-        lastMark  = pRepo->data[0].turns[level-1].mark;
-        lastGuess = pRepo->data[0].turns[level-1].guess;
-        prevGuess = pRepo->data[0].turns[level].guess;
-        for( i = 1; i < pRepo->actualCodes; i++ )
+        // Look at each level and if the previous guesses and marks were the same - this guess must be the same
+        for( level = 1; level < pRepo->data[i].actualNoTurns; level++ )
         {
-//            if( lastMark != allBlack && lastMark != -1 && pRepo->data[i].turns[level-1].mark == lastMark && pRepo->data[i].turns[level-1].guess == lastGuess )
+            lastMark  = pRepo->data[i-1].turns[level-1].mark;
+            lastGuess = pRepo->data[i-1].turns[level-1].guess;
             if( pRepo->data[i].turns[level-1].mark == lastMark && pRepo->data[i].turns[level-1].guess == lastGuess )
             {
-                if( pRepo->data[i].turns[level].guess != prevGuess ) pRepo->data[i].guessConsistant = false;
+                prevGuess = pRepo->data[i-1].turns[level].guess;
+                if( pRepo->data[i].turns[level].guess != prevGuess )
+                    pRepo->data[i].guessConsistant = false;
             }
-            else
-            {
-                lastMark = pRepo->data[i].turns[level-1].mark;
-                prevGuess = pRepo->data[i].turns[level].guess;
-            }
+
         }
     }
     return 0;
@@ -438,8 +456,6 @@ int checkMarks( Repo* pRepo )
             mark = marking( pRepo, pRepo->data[i].code, pRepo->data[i].turns[g].guess );
             if( pRepo->data[i].turns[g].mark == mark )
                 pRepo->data[i].turns[g].markOK = true;
-//            else                                      // DEBUG
-//                pRepo->data[i].marksOK = false;
         }
     }
     return 0;
@@ -449,13 +465,22 @@ int report( Repo* pRepo )
 {
     bool  fileError     = false;
     bool  solutionError = false;
+    bool* solnErrIndex  = NULL;
     bool  guessError    = false;
     char  buffer[15];
     char  line[256];
     FILE* fpo           = NULL;
     int   len           = 0;
+    int   TTTS          = 0;
     int   i             = 0;
     int   j             = 0;
+
+    solnErrIndex = (bool*)malloc( sizeof(bool) * pRepo->actualCodes );
+    if( solnErrIndex == NULL )
+    {
+        fprintf( stderr, "Failed to allocate array in report function\n" );
+        return -1;
+    }
 
     // Put solutions back into original order
     qsort( pRepo->data, pRepo->actualCodes, sizeof(Solution), cmpLineOrder );
@@ -471,27 +496,32 @@ int report( Repo* pRepo )
     // Now work out if there are any solution level problems
     for( i = 0; i < pRepo->actualCodes; i++ )
     {
-        if(    ! pRepo->data[i].codeOK  || ! pRepo->data[i].turnsOK   || ! pRepo->data[i].resolved
-            || ! pRepo->data[i].marksOK || ! pRepo->data[i].guessConsistant
+        solnErrIndex[i] = false;
+
+        if(    ! pRepo->data[i].codeOK   ||   pRepo->data[i].codeRepeated || ! pRepo->data[i].turnsOK
+            || ! pRepo->data[i].resolved || ! pRepo->data[i].marksOK      || ! pRepo->data[i].guessesOK || ! pRepo->data[i].guessConsistant
           )
         {
+            solnErrIndex[i] = true;
             solutionError = true;
         }
         else
         {
-            if( ! pRepo->data[i].guessesOK )
-                solutionError = true;
-            else
-                for( j = 0; j < pRepo->data[i].actualNoTurns; j++ )
-                    if( ! pRepo->data[i].turns[j].guessOK )
-                        solutionError = true;
+            for( j = 0; j < pRepo->data[i].actualNoTurns; j++ )
+                if( ! pRepo->data[i].turns[j].guessOK || ! pRepo->data[i].turns[j].markOK )
+                {
+                    solnErrIndex[i] = true;
+                    solutionError = true;
+                }
         }
     }
 
     // Hopefully no problems...
     if( ! fileError && ! solutionError )
     {
-        fprintf( stdout, "No errors found\n\n" );
+        for( i = 0; i < pRepo->actualCodes; i++ )
+            TTTS += pRepo->data[i].noTurns;
+        fprintf( stdout, "No errors found.  TTTS = %d\n\n", TTTS );
         return 0;
     }
 
@@ -553,14 +583,12 @@ int report( Repo* pRepo )
         fseek( pRepo->fp, 0, SEEK_SET );      // Go to the beginning of the solution file
 
         getLine( pRepo->fp, line, 256 );
-        fprintf( fpo, ",,%s\n", line );  // Write header
+        fprintf( fpo, "Status,Issues,%s\n", line );  // Write header
 
         for( i = 0; i < pRepo->actualCodes; i++ )
         {
             getLine( pRepo->fp, line, 256 );
-            if(    pRepo->data[i].codeOK  && pRepo->data[i].turnsOK   && pRepo->data[i].resolved
-                && pRepo->data[i].marksOK && pRepo->data[i].guessConsistant
-            )
+            if( ! solnErrIndex[i] )
             {
                 fprintf( fpo, "OK,,%s\n", line );  // Say it's ok - then add original line
             }
@@ -596,6 +624,9 @@ int report( Repo* pRepo )
         fclose( fpo );
     }
     fprintf( stdout, "\n" );
+    free( solnErrIndex );
+    solnErrIndex = NULL;
+
     return 0;
 }
 
